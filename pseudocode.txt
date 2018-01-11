@@ -1,0 +1,73 @@
+Knot Diagram Plotting
+
+new(); # size 5x5, head on (3,3), heading px
+plot( $first_crossing );
+drawn( $first_crossing->other );
+commit();
+
+for @crossings -> $crossing {
+    advance();
+    if( isdrawn( $crossing ) ) {
+        while( $not_found ) {
+            If( look_left() == $crossing ) {
+                Turn_left();
+                Advance();
+                Plot( $crossing );
+                Commit();
+            }
+            Elsif( look_ahead() == $crossing ) {
+                advance();
+                Plot( $crossing );
+                Commit();
+            }
+            Elsif( look_right() == $crossing ) {
+                Turn_right();
+                Advance();
+                Plot( $crossing );
+                commit();
+            }
+            Else {
+                for can_go() -> TStart(), $direction {
+                    turn( $direction );
+                    Advance();
+                    Next;
+                }
+                Else {
+                    TEnd();
+                }
+            }
+        }
+    }
+    else {
+        plot( $crossing );
+        drawn( $crossing->other );
+        commit();
+    }
+}
+
+Push @solutions, $diagram;
+Join();
+
+If( @solutions ) {
+    $solution = @solutions.smallest();
+}
+Else {
+    Fail( "impossible" );
+}
+
+###
+Commit() contains:
+Path simplification and beautification;
+encroachment prevention;
+
+Path simplification:
+Only looks at the uncommitted path
+# note that this searches all directions
+while( /(P)\s*(P)/ and $1 not adjacent $2 ) {
+    my( $l, $h ) = ( $1, $2 ).sort( &path_order );
+    clear( $l ^..^ $h );
+    Drawline( $l -> $h );
+}
+
+Encroachment prevention: If have parallel lines without a gap, shift the high side of the diagram so that there is one
+◦   
