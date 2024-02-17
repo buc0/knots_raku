@@ -1,4 +1,3 @@
-
 use v6;
 
 use lib <.>;
@@ -181,6 +180,7 @@ possible styles
 
 my enum SeekingPattern <cw ccw>;
 my enum PathingStatus <pathing-open pathing-taken pathing-blocked pathing-abandoned>;
+my enum PlotGoal <plot-find-first plot-find-best>;
 
 my %arrow-by-heading = (
     ph-pos-x => '→',
@@ -245,27 +245,43 @@ my %turnChart = (
         pd-ahead => ph-pos-x,
         pd-right => ph-neg-y,
         pd-back => ph-neg-x,
+        ph-neg-x => pd-back,
+        ph-neg-y => pd-right,
+        ph-pos-x => pd-ahead,
+        ph-pos-y => pd-left,
     },
     ph-pos-y => {
         pd-left => ph-neg-x,
         pd-ahead => ph-pos-y,
         pd-right => ph-pos-x,
         pd-back => ph-neg-y,
+        ph-neg-x => pd-left,
+        ph-neg-y => pd-back,
+        ph-pos-x => pd-right,
+        ph-pos-y => pd-ahead,
     },
     ph-neg-x => {
         pd-left => ph-neg-y,
         pd-ahead => ph-neg-x,
         pd-right => ph-pos-y,
         pd-back => ph-pos-x,
+        ph-neg-x => pd-ahead,
+        ph-neg-y => pd-left,
+        ph-pos-x => pd-back,
+        ph-pos-y => pd-right,
     },
     ph-neg-y => {
         pd-left => ph-pos-x,
         pd-ahead => ph-neg-y,
         pd-right => ph-neg-x,
         pd-back => ph-pos-y,
+        ph-neg-x => pd-right,
+        ph-neg-y => pd-ahead,
+        ph-pos-x => pd-left,
+        ph-pos-y => pd-back,
     },
 );
-sub do-seek( SeekingPattern:D :$seeking-pattern, :$cur-segment, Int:D :$seq, Grid:D :$grid! ) {
+sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, Grid:D :$grid! ) {
     say "seeking $seeking-pattern";
 
     my @trail;
@@ -286,89 +302,84 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$cur-segment, Int:D :$seq, Gri
         say "scratch;";
         say $scratch-grid.render-to-multiline-string;
 
+        # backed-out pathing attempts may have rendered some things blocked, so even if we've been
+        # here before we still need to look around
+
+        say "at: " ~ $scratch-grid.get-head-location;
+        say "heading: " ~ $scratch-grid.get-heading;
+
+        my %vistas;
+
         # taken will exist if we've backtracked to here, in which case we don't need to look around again
         if $here<taken>:!exists {
             say "we haven't been here before (at least not officially)";
-
-            say "at: " ~ $scratch-grid.get-head-location;
-            say "heading: " ~ $scratch-grid.get-heading;
 
             # we've never officially been here before
             for ( pd-right, pd-ahead, pd-left ) -> $look-direction {
                 my $vista = $scratch-grid.look( relative => $look-direction );
 
+                %vistas{ $look-direction } = $vista;
+
                 if $vista.DEFINITE {
-                    if $vista<user-data> {
-                        my $user-data = $vista<user-data>;
+                    if $vista<found>.DEFINITE {
+                        my $looking-absolute = %turnChart{ $scratch-grid.get-heading }{ $look-direction };
 
-                        if $user-data<trail>:exists and $user-data<trail> == pathing-taken {
-                            my $back-to = $user-data<traillen>;
+                        my $notes = $vista<found>;
+                        my $user-data = $notes<user-data> // {};
 
-                            while @trail.elems > $back-to {
-                                # back out of the location without leaving any (further) marks
-                                @trail.pop;
-
-                                # we can do this without checking the array bounds because we're in this block
-                                # on account of there being prior trail segments
-                                my $prev = @trail[ *-1 ];
-
-                                # first, backtrack to the previous location
-                                $scratch-grid.turn( relative => pd-back );
-                                $scratch-grid.advance( plotting => True );
-
-                                # next, reorient as if we had just entered it
-                                if $prev<taken> == pd-ahead {
-                                    $scratch-grid.turn( relative => pd-back );
-                                }
-                                else {
-                                    $scratch-grid.turn( relative => $prev<taken> );
-                                }
-
-                                $scratch-grid.plot( mark => 'a', user-data => { trail => pathing-abandoned } );
-
-                                # mark this direction as blocked
-                                $prev{ $prev<taken> } = pathing-blocked;
-
-                                say "scratch during backout";
-                                say $scratch-grid.render-to-multiline-string;
-                                say $scratch-grid.get-head-location;
-                                say $scratch-grid.get-heading;
-                            }
-
-                            next SEEKING;
+                        if $vista<distance> == 1 and $user-data<trail>:exists and $user-data<trail> == pathing-taken {
+                            $here{ $look-direction } = pathing-taken;
                         }
                         elsif $vista<distance> == 1 {
-                            my $looking-absolute = %turnChart{ $scratch-grid.get-heading }{ $look-direction };
                             my $looking-at-side = %turnChart{ $looking-absolute }<pd-back>;
                             say "looking relative $look-direction, looking absolute $looking-absolute at the $looking-at-side face";
 
-                            if $user-data{ $looking-at-side }:exists and $user-data{ $looking-at-side } === $cur-segment {
-                                # we found our goal!
-                                $here<taken> = $look-direction;
+                            if $user-data{ $looking-at-side }:exists {
+                                if $user-data{ $looking-at-side } === $target-segment {
+                                    # we found our goal!
+                                    $here<taken> = $look-direction;
 
-                                last SEEKING;
+                                    last SEEKING;
+                                }
+                                else {
+                                    say "looking at $looking-at-side and seeing $user-data{ $looking-at-side }, looking for $target-segment";
+                                    my %c;
+                                    for ph-pos-x, ph-pos-y, ph-neg-x, ph-neg-y -> $h {
+                                        %c{ $h } = $user-data{ $h } // '';
+                                    }
+                                    say "+x %c{ ph-pos-x }, +y %c{ ph-pos-y }, -x %c{ ph-neg-x }, -y %c{ ph-neg-y }";
+                                    say "blocked 5";
+                                    $here{ $look-direction } = pathing-blocked;
+                                }
                             }
                             else {
-                                say "looking at $looking-at-side and seeing $user-data{ $looking-at-side }, looking for $cur-segment";
-                                say "+x $user-data{ ph-pos-x }, +y $user-data{ ph-pos-y }, -x $user-data{ ph-neg-x }, -y $user-data{ ph-neg-y }";
+                                say "looking at $looking-at-side and seeing nothing, looking for $target-segment";
+                                my %c;
+                                for ph-pos-x, ph-pos-y, ph-neg-x, ph-neg-y -> $h {
+                                    %c{ $h } = $user-data{ $h } // '';
+                                }
+                                say "+x %c{ ph-pos-x }, +y %c{ ph-pos-y }, -x %c{ ph-neg-x }, -y %c{ ph-neg-y }";
+                                say "blocked 2";
                                 $here{ $look-direction } = pathing-blocked;
                             }
                         }
                         else {
-                            say "saw something at distance " ~ $user-data<distance>;
+                            say "saw something at distance " ~ $vista<distance>;
+                            $here{ $look-direction } = pathing-open;
                         }
                     }
-
-                    if $vista<distance> > 1 {
-                        say $look-direction ~ " over 1 away, open";
-                        $here{ $look-direction } = pathing-open;
+                    elsif $vista<line> and $vista<distance> == 1 {
+                        say "blocked 3";
+                        $here{ $look-direction } = pathing-blocked;
                     }
                     else {
-                        $here{ $look-direction } = pathing-blocked;
+                        say $look-direction ~ " assumed open";
+                        $here{ $look-direction } = pathing-open;
                     }
                 }
                 else {
                     say $look-direction ~ " nothing at all, open";
+                    fail;
                     $here{ $look-direction } = pathing-open;
                 }
             }
@@ -383,12 +394,73 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$cur-segment, Int:D :$seq, Gri
                 $chosen-direction = $direction;
                 last PREFERENCE;
             }
+            elsif $here{ $direction } == pathing-taken {
+                my $seeking-absolute = %turnChart{ $scratch-grid.get-heading }{ $direction };
+                my $vista = %vistas{ $direction };
+                my $notes = $vista<found>;
+                my $user-data = $notes<user-data> // {};
+                my $back-to = $user-data<traillen>;
+
+                while @trail.elems > $back-to {
+                    $scratch-grid.plot( mark => 'a', user-data => { trail => pathing-abandoned } );
+
+                    # back out of the location without leaving any (further) marks
+                    @trail.pop;
+
+                    # we can do this without checking the array bounds because we're in this block
+                    # on account of there being prior trail segments
+                    my $prev = @trail[ *-1 ];
+
+                    # first, backtrack to the previous location
+                    $scratch-grid.turn( relative => pd-back );
+                    $scratch-grid.advance( plotting => False );
+
+                    # next, reorient as if we had just entered it
+                    if $prev<taken> == pd-ahead {
+                        $scratch-grid.turn( relative => pd-back );
+                    }
+                    else {
+                        $scratch-grid.turn( relative => $prev<taken> );
+                    }
+
+                    # mark this direction as blocked
+                    $prev{ $prev<taken> } = pathing-blocked;
+                }
+
+                # mark the direction we were going to re-enter this space from as blocked
+                # but we have to mark it relative to the original heading when we entered
+                # that space
+                my $approached-from-relative = %turnChart{ $scratch-grid.get-heading }{ %turnChart{ $seeking-absolute }{ pd-back } };
+                @trail[ *-1 ]{ $approached-from-relative } = pathing-blocked;
+
+                # this may be redundant with the prior marking, but that's OK
+                # also mark pd-ahead as blocked because this plotting algorithm can't generate
+                # disconnected segments, therefore one of two conditions must be true:
+                # 1) this is an enclosed space with nothing in the middle, therefore there's nothing
+                #    to be gained by filling it in with trails that must also be abandoned.
+                # 2) this is the outside of the grid with nothing else "out there" to be found,
+                #    therefore we can't find our target even though we have infinite space that
+                #    we can look at.
+                # While case 1) will resolve itself properly without a short-cut, case 2) needs help
+                # or the trail will seek forever.
+                @trail[ *-1 ]{ pd-ahead } = pathing-blocked;
+
+                say "scratch after backout";
+                say $scratch-grid.render-to-multiline-string;
+                say $scratch-grid.get-head-location;
+                say $scratch-grid.get-heading;
+
+                $here{ $direction } = pathing-abandoned;
+
+                # need to restart seeking at the point we just backed-out to, including looking around again
+                redo SEEKING;
+            }
             else {
                 say "would like to go $direction but is $here{ $direction }"
             }
         }
 
-        if $chosen-direction {
+        if $chosen-direction.DEFINITE {
             $scratch-grid.plot( user-data => { trail => pathing-taken, traillen => @trail.elems } );
 
             $here<taken> = $chosen-direction;
@@ -410,7 +482,7 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$cur-segment, Int:D :$seq, Gri
 
                 # first, backtrack to the previous location
                 $scratch-grid.turn( relative => pd-back );
-                $scratch-grid.advance( plotting => True );
+                $scratch-grid.advance( plotting => False );
 
                 # next, reorient as if we had just entered it
                 if $prev<taken> == pd-ahead {
@@ -421,6 +493,7 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$cur-segment, Int:D :$seq, Gri
                 }
 
                 # finally, mark this option as blocked
+                say "blocked 4";
                 $prev{ $prev<taken> } = pathing-blocked;
             }
         }
@@ -441,7 +514,7 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$cur-segment, Int:D :$seq, Gri
         $trail-grid.advance;
     }
 
-    my $annotation = %annotation-location-by-position{ $cur-segment.position } => $seq ~ %arrow-by-heading{ $trail-grid.get-heading };
+    my $annotation = %annotation-location-by-position{ $target-segment.position } => $seq ~ %arrow-by-heading{ $trail-grid.get-heading };
     $trail-grid.plot( |$annotation );
 
     # render trail as a string
@@ -450,7 +523,277 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$cur-segment, Int:D :$seq, Gri
     return( $found-path, $trail-grid );
 }
 
-sub plot( Tangle:D :$tangle ) {
+# lower score is better
+# returns a list of scores, primary and successive tiebreakers
+# primary score is area
+# first tiebreaker is number of points as a measure of complexity
+#   ( since these grids are plots of a knot/tangle formed from a single strand,
+#     the number of lines are a function of the number of points and number of crossings.
+#       each crossing is a point with four lines.
+#       each non-crossing point is on exactly two lines.
+#       crossings * 2 + (n-points - crossings) == n-lines
+#     therefore the number of lines won't break any ties )
+# second tiebreaker is absolute value of delta between width and height
+#    e.g. to prefer 5x6 over 3x10
+sub score-grid( Grid:D :$grid ) {
+    my $grid-size = $grid.get-grid-size;
+    my $grid-area = $grid-size<x> * $grid-size<y>;
+    my $num-points = $grid.get-num-points;
+    my $oblongity = abs( $grid-size<x> - $grid-size<y> );
+    return ( $grid-area, $num-points, $oblongity );
+}
+
+sub grid-compare( $a, $b ) {
+    return ( $a[0] <=> $b[0] || $a[1] <=> $b[1] || $a[2] <=> $b[2] );
+}
+
+# TODO
+#   really want a version of plot/do-seek that works depth-first rather than breadth first
+#   for the initial "is this knot imaginary" plot, as at that point we aren't interested in
+#   the "optimal" plot, only the question of whether or not it can be plotted.
+#
+#   a depth-first mode could also speed up a search for an "optimal" plot by eliminating
+#   combinations as soon as they are guaranteed to be worse than the current known-best
+#   e.g. if minimal area is the first criteria then a combination could be discarded before
+#   complettion if its current area is larger than any completion known so far
+sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
+    # low score is better
+    my @best-score = ( Inf, Inf, Inf );
+
+    my @best-grids = ();
+
+    # this may replace @grid-states completely, and if it does then it should be renamed to @grid-states
+    # state consists of:
+    #   grid
+    #   seeking direction (if any)
+    #   seeking target (if any)
+    #   segments left to plot
+    #   known segments
+    #   crossing type information
+    #   seq
+    my @grid-stack = ();
+
+    # plot first crossing, creating first state
+    {
+        my @segments-left = $tangle.getOrderedList().grep( { $_ ~~ Knot::Tangle::CrossedSegment } );
+        my $known-segments = SetHash.new;
+
+        my $first-segment = @segments-left.shift;
+        my $seq = 1;
+
+        @segments-left.push( $first-segment );
+        $known-segments{ $first-segment } = True;
+
+        my $grid = Grid.new;
+
+        my %new-crossing-types;
+
+        my $annotation = %annotation-location-by-position{ $first-segment.position } => $seq ~ %arrow-by-heading{ $grid.get-heading };
+
+        my $crossing = $first-segment.crossing;
+        my $crossed = $crossing.segments[ over - $first-segment.position ];
+
+        # the first segment is the only one that needs to mark an entry point for itself
+        my $user-data = {
+            ph-neg-x => $first-segment,
+        };
+
+        if $crossing.type.DEFINITE {
+            if
+                ( $first-segment.position == over and $crossing.type == L-minus ) or
+                ( $first-segment.position == under and $crossing.type == L-plus )
+            {
+                $user-data<ph-pos-y> = $crossed;
+            }
+            else {
+                $user-data<ph-neg-y> = $crossed;
+            }
+        }
+        else {
+            $user-data<ph-neg-y> = $crossed;
+            $user-data<ph-pos-y> = $crossed;
+            # store the current heading to be used later to calculate the type
+            %new-crossing-types{ $crossing } = ph-pos-x;
+        }
+
+        $grid.plot( mark => '─', |$annotation, :$user-data );
+
+        @grid-stack.push( {
+            :$grid,
+            seeking-pattern => Any,
+            seeking-target => Any,
+            :@segments-left,
+            :$known-segments,
+            :%new-crossing-types,
+            :$seq,
+        } );
+    }
+
+    while @grid-stack.elems {
+        say "top of loop";
+        say "grid stack has " ~ @grid-stack.elems ~ " elements";
+        my $grid-state = @grid-stack.pop;
+        my $grid = $grid-state<grid>;
+
+        # check to see if this state is already worse than the known best
+        my @grid-score = score-grid( :$grid );
+
+        if grid-compare( @grid-score, @best-score ) == More {
+            # there's no point in pursuing this state further
+            say "aborting this state, too large 1";
+            next;
+        }
+
+        my $seq = $grid-state<seq>;
+        my $new-crossing-types = $grid-state<new-crossing-types>;
+        my $known-segments = $grid-state<known-segments>;
+
+        # if seeking
+        #   do the seek
+        if $grid-state<seeking-pattern>.DEFINITE {
+            my $seeking-pattern = $grid-state<seeking-pattern>;
+            my $target-segment = $grid-state<seeking-target>;
+            my $crossing = $target-segment.crossing;
+
+            say "$target-segment";
+            say $seq;
+            my ( $found-path, $trail-grid ) = do-seek( :$seeking-pattern, :$target-segment, :$seq, grid => $grid.clone );
+
+            if $found-path.DEFINITE {
+                $known-segments{ $target-segment } = True;
+
+                if !$crossing.type.DEFINITE {
+                    my $discovered-type;
+
+                    if $target-segment.position == over {
+                        $discovered-type = %crossing-type-by-headings{ $grid.get-heading }{ $new-crossing-types{ $crossing } };
+                    }
+                    else {
+                        $discovered-type = %crossing-type-by-headings{ $new-crossing-types{ $crossing } }{ $grid.get-heading };
+                    }
+
+                    $new-crossing-types{ $crossing } = $discovered-type;
+                }
+
+                # simplify before de-encroach tends to improve performance by making
+                # future paths shorter and less complex
+                $trail-grid.simplify;
+                $trail-grid.de-encroach;
+
+                say "after $seq:";
+                say $trail-grid.render-to-multiline-string;
+
+                $grid = $trail-grid;
+            }
+        }
+
+        my $segments-left = $grid-state<segments-left>;
+
+        # plot as many unknown segments as you can
+        while $segments-left.elems {
+            my $cur-segment = $segments-left[0];
+            my $crossing = $cur-segment.crossing;
+            my $crossed = $crossing.segments[ over - $cur-segment.position ];
+
+            if $known-segments{ $crossed }:exists {
+                last;
+            }
+
+            $segments-left.shift;
+            $seq++;
+
+            $known-segments{ $cur-segment } = True;
+
+            $grid.advance();
+
+            my $heading = $grid.get-heading;
+
+            my $annotation = %annotation-location-by-position{ $cur-segment.position } => $seq ~ %arrow-by-heading{ $heading };
+
+            my $user-data = {};
+
+            if $crossing.type.DEFINITE {
+                if
+                    ( $cur-segment.position == over and $crossing.type == L-minus ) or
+                    ( $cur-segment.position == under and $crossing.type == L-plus )
+                {
+                    $user-data{ %crossing-directions{ $heading }<pd-left> } = $crossed;
+                }
+                else {
+                    $user-data{ %crossing-directions{ $heading }<pd-right> } = $crossed;
+                }
+            }
+            else {
+                $user-data{ %crossing-directions{ $heading }<pd-left> } = $crossed;
+                $user-data{ %crossing-directions{ $heading }<pd-right> } = $crossed;
+                # store the current heading to be used later to calculate the type
+                $new-crossing-types{ $crossing } = $heading;
+            }
+
+            $grid.plot( mark => %mark-by-heading{ $grid.get-heading }, |$annotation, :$user-data );
+
+            $grid.de-encroach;
+
+            say "after $seq:";
+            say $grid.render-to-multiline-string;
+        }
+
+        # check to see if this state is already worse than the known best
+        @grid-score = score-grid( :$grid );
+        my $grid-score = grid-compare( @grid-score, @best-score );
+
+        if $grid-score == More {
+            # there's no point in pursuing this state further
+            say "aborting this state, too large 2";
+            next;
+        }
+
+        if $segments-left.elems {
+            # create both child seeking states
+            my $cur-segment = $segments-left.shift;
+
+            # are we looking for the first/last segment?
+            if $segments-left.elems {
+                $seq++;
+            }
+            else {
+                $seq = 1;
+            }
+
+            for ( cw, ccw ) -> $seeking-pattern {
+                @grid-stack.push( {
+                    grid => $grid.clone,
+                    seeking-pattern => $seeking-pattern,
+                    seeking-target => $cur-segment,
+                    segments-left => $segments-left.clone,
+                    known-segments => $known-segments.clone,
+                    new-crossing-types => $new-crossing-types.clone,
+                    :$seq,
+                } );
+            }
+        }
+        else {
+            if $grid-score == Less {
+                say "setting new best";
+                @best-score = @grid-score;
+                @best-grids = ( $grid );
+
+                # early-out if plot-find-first
+                if $goal == plot-find-first {
+                    return ($grid);
+                }
+            }
+            elsif $grid-score == Same {
+                say "adding new best";
+                @best-grids.push( $grid );
+            }
+        }
+    }
+
+    return @best-grids;
+
+    ### END ###
+
     my @grid-states;
 
     my @segments-left = $tangle.getOrderedList().grep( { $_ ~~ Knot::Tangle::CrossedSegment } );
@@ -462,9 +805,6 @@ sub plot( Tangle:D :$tangle ) {
 
     my $first-segment = @segments-left.shift;
     my $seq = 1;
-
-    # we need to come back around to this while plotting
-    @segments-left.push( $first-segment );
 
     {
         my $grid = Grid.new;
@@ -511,10 +851,6 @@ sub plot( Tangle:D :$tangle ) {
         my $cur-segment = @segments-left.shift;
         $seq++;
 
-        if !@segments-left {
-            $seq = 1;
-        }
-
         say "$seq $cur-segment";
 
         my $crossing = $cur-segment.crossing;
@@ -536,7 +872,7 @@ sub plot( Tangle:D :$tangle ) {
                 my %found-paths = SetHash.new;
 
                 for ( cw, ccw ) -> $seeking-pattern {
-                    my ( $found-path, $trail-grid ) = do-seek( :$seeking-pattern, :$cur-segment, :$seq, grid => $grid.clone );
+                    my ( $found-path, $trail-grid ) = do-seek( :$seeking-pattern, target-segment => $cur-segment, :$seq, grid => $grid.clone );
 
                     if $found-path.DEFINITE and !%found-paths{ $found-path } {
                         # now that we've found it, and it isn't duplicate, check to see if the crossing type is known
@@ -549,15 +885,18 @@ sub plot( Tangle:D :$tangle ) {
                                 $discovered-type = %crossing-type-by-headings{ $grid.get-heading }{ $state<new-crossing-types>{ $crossing } };
                             }
                             else {
-                                $discovered-type = %crossing-type-by-headings{ $state<new-crossing-types>{ $crossing } }{ $grid.heading };
+                                $discovered-type = %crossing-type-by-headings{ $state<new-crossing-types>{ $crossing } }{ $grid.get-heading };
                             }
 
                             %new-crossing-types{ $crossing } = $discovered-type;
                         }
 
+                        # TODO
+                        #   evaluate calling simplify before de-encroach; may be performance boost
+                        $trail-grid.simplify;
                         $trail-grid.de-encroach;
 
-                        say "after:";
+                        say "after $seq:";
                         say $trail-grid.render-to-multiline-string;
 
                         @new-states.push( { grid => $trail-grid.clone, :%new-crossing-types } );
@@ -570,7 +909,6 @@ sub plot( Tangle:D :$tangle ) {
                 # setting a completely new crossing into position
                 $known-segments{ $cur-segment } = True;
 
-                $grid.advance();
                 $grid.advance();
 
                 my $heading = $grid.get-heading;
@@ -600,6 +938,8 @@ sub plot( Tangle:D :$tangle ) {
 
                 $grid.plot( mark => %mark-by-heading{ $grid.get-heading }, |$annotation, :$user-data );
 
+                $grid.de-encroach;
+
                 @new-states.push( $state );
             }
         } # STATE
@@ -608,23 +948,77 @@ sub plot( Tangle:D :$tangle ) {
         @grid-states = @new-states;
     }
 
+    # now need to come back to the first segment
+    {
+        my @new-states;
+
+        STATE: for @grid-states -> $state {
+            my $grid = $state<grid>;
+
+            say "before:";
+            say $grid.render-to-multiline-string;
+
+            say "returning to start";
+
+            my %found-paths = SetHash.new;
+
+            for ( cw, ccw ) -> $seeking-pattern {
+                my ( $found-path, $trail-grid ) = do-seek( :$seeking-pattern, target-segment => $first-segment, seq => 1, grid => $grid.clone );
+
+                if $found-path.DEFINITE and !%found-paths{ $found-path } {
+                    $trail-grid.de-encroach;
+
+                    say "after final:";
+                    say $trail-grid.render-to-multiline-string;
+
+                    @new-states.push( { grid => $trail-grid.clone, new-crossing-types => {} } );
+
+                    %found-paths{ $found-path } = True;
+                }
+            }
+        }
+
+        @grid-states = @new-states;
+    }
+
     say "found " ~ @grid-states.elems ~ " states\n";
 
     # check to see if we failed to plot
-    if @grid-states {
+    if not @grid-states {
+        fail;
     }
 
     # next choose the winning grid
+    for @grid-states -> $state {
+        my $grid = $state<grid>;
+        say $grid.render-to-multiline-string;
+        $grid.simplify;
+        say $grid.render-to-multiline-string;
+    }
+    ...
 
     # next check for crossings that need a type assigned
 }
 
-if 1 {
-    my $t = Tangle.new( dowker-str => "6 2 4" );
+
+if True {
+    #say "plotting trefoil";
+    #my $t = Tangle.new( dowker-str => "4 6 2" );
+
+    # not at trefoil - unknot with three twists
+    #my $t = Tangle.new( dowker-str => "6 2 4" );
+
+    # The tangle I drew and simplified by hand
+    my $t = Tangle.new( dowker-str => "10 20 18 -4 2 -14 -16 -12 -22 6 -8" );
+
+    # imaginary
+    #my $t = Tangle.new( dowker-str => "4 6 8 10 2" );
+    #my $t = Tangle.new( dowker-str => "4 6 8 10 12 14 16 18 2" );
+    #my $t = Tangle.new( dowker-str => "4 6 10 18 2 8 12 14 16" );
     plot( tangle => $t );
 }
 
-if 0 {
+if False {
 # The tangle I drew and simplified by hand
 #my $t = Tangle.new( dowker-str => "10 20 18 -4 2 -14 -16 -12 -22 6 -8" );
 
@@ -731,7 +1125,7 @@ dd %unique-dowkers;
     algorithms often spend as much time looking in the "wrong" directions for a
     "slow teleport" to their destination as they do looking in the "right"
     direction to find a "direct route" to their destination.  within the context
-    of that article a "slow teleport" is a way of traversing from point C to
+    of that article a "slow teleport" is a way of traversing from poin C to
     point D at the normal movement cost but without crossing any of the already
     searched points in between.  In a constrained 2d maze world it would be like
     being able to climb down into a tunnel that passed under the rest of the maze,
