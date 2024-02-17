@@ -1,0 +1,91 @@
+diagram option:
+(old)
+
+ hh ─
+ dr ┌
+ dl ┐
+ ur └
+ ul ┘
+
+ HH ━
+ DR ┏
+ LD ┓
+ UR ┗
+ UL ┛
+
+ vv │
+ VV ┃
+
+ hV ╂
+
+ Hv ┿
+
+
+ ───┓ ┌──────┓ ┌──────┓ ┌──────┓ ┌───
+ ───╂─┘┌─────╂─┘┌─────╂─┘┌─────╂─┘┌──
+ ───╂──┘┌────╂──┘┌────╂──┘┌────╂──┘┌─
+    ┗───┘    ┗───┘    ┗───┘    ┗───┘ 
+
+
+
+   ┏──┐
+  ┌╂─━┿┓
+  │┃  ││
+  ││  ┃│
+  │└──╂┘
+  └───┛
+
+
+On a proof for extracting subknots:
+One of the key parts of my algorithm is the excision of self-contained
+subknots, which are then analyzed seperately.  Maybe this has already been
+proven to be a valid technique, but I'm not aware of it (granted, I haven't
+done a lot of research into papers that might address it).
+
+My approach is rare in maths, a physical demonstration leaving the mathmatical
+soundness of it for someone else.
+
+Take a length of string and form it into a specific formation.  In my thought
+versions of this I've used a pair of trefoils of opposite chirility, in
+sequence together.  Then join the ends to make it a closed loop.  Once the
+ends are joined the essential topology of the knot is fixed and cannot be
+changed, though the apparent topology of it can change a great deal.
+
+Take a length of pipe-cleaner and weave it through the openings of one of the
+trefoils, then pull the string tight around the pipe-cleaner.  The purpose of
+the pipe-cleaner is to make it easier to loosen the trefoil later.
+
+The first thing to prove is that it's trivial to move a strand of the string
+in the larger trefoil over the entirety of the smaller trefoil.  This is not
+one of the fundamental Reidemeister moves.  While it could be decompsed into a
+sequence of them, doing so is unnecessary.  We have just proven that this is
+valid.
+
+Building on that validity, it is easy to demonstrate physically that one can
+manipulate the string so that the tight trefoil is at any desired point within
+the larger trefoil, including at any desired point within a set of extraneous
+crossings created in the larger trefoil.
+
+In particular, if one makes a simple twist (Reidemeister Type 1), translates
+the smaller trefoil to be on the loop created by that twist, and then loosens
+the smaller trefoil to be equal size, then one is left with an apparent
+topology in which it appears that the crossing created by the twist is
+essential to the knot.
+
+Reversing this process demonstrates why it is valuable for analysis to excise
+self-contained subknots.
+
+
+A further demonstration involves three or four trefoils in sequence on a
+string.  By using the method of tightening the knots and translation along the
+string it can be demonstrated that these trefoils can be rearranged as desired
+in to any ordering sequence whatsoever.  This proves communicability of
+excised subknots, which may be useful later.
+
+
+Alternatively, both demonstrations could be made using a string with four
+knots, two trefoils (3₁) and two figure eights (4₁).
+
+
+This string may also be useful to provide visual examples of later analysis to
+determine how to simplify knots.
