@@ -190,11 +190,11 @@ my %arrow-by-heading = (
     ph-pos-y => '↑',
     ph-neg-y => '↓',
 );
-my %mark-by-heading = (
-    ph-pos-x => '─',
-    ph-neg-x => '─',
-    ph-pos-y => '│',
-    ph-neg-y => '│',
+my %mark-by-heading-and-position = (
+    ph-pos-x => { over => '─', under => '│' },
+    ph-neg-x => { over => '─', under => '│' },
+    ph-pos-y => { over => '│', under => '─' },
+    ph-neg-y => { over => '│', under => '─' },
 );
 my %preferences-by-seeking-pattern = (
     cw  => ( pd-right, pd-ahead, pd-left ),
@@ -739,7 +739,7 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                 $new-crossing-types{ $crossing } = $heading;
             }
 
-            $grid.plot( mark => %mark-by-heading{ $grid.get-heading }, |$annotation, :$user-data );
+            $grid.plot( mark => %mark-by-heading-and-position{ $grid.get-heading }{ $cur-segment.position }, |$annotation, :$user-data );
 
             $grid.de-encroach;
 
