@@ -557,6 +557,9 @@ sub grid-compare( $a, $b ) {
 }
 
 # TODO
+#   Adjust locations of grid dumps to better line up with the needs of comparisons of
+#   different algorithmic optimizations.
+#
 #   Add logic that detects when cw and ccw pathing generate the exact same grid and
 #   skip further development of the redundant grid.
 sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
