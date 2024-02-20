@@ -556,6 +556,19 @@ sub grid-compare( $a, $b ) {
 #   combinations as soon as they are guaranteed to be worse than the current known-best
 #   e.g. if minimal area is the first criteria then a combination could be discarded before
 #   complettion if its current area is larger than any completion known so far
+#
+# TODO #3
+#   After coming back to this from a very long hiatus and not entirely sure of the state of
+#   things, I ran the program as it was and was watching a very long repetitive-seeming plot
+#   seeking for the optimal and my observation was "this really shouldn't be depth-first, it
+#   should be breadth-first so that each ply is tried with only the best paths to each state"
+#   ... and then I opened up the code and read the above todo...
+#   looking at the code I can see that it's currently ussing a depth-first implementation,
+#   Q. so it may be just missing the culling logic?
+#   A. after review, it seems that what's missing is that a current partial state that's
+#      exactly the same as a partial state of the best score will look like its worth
+#      pursuing even though it can't possibly improve on it.  Fixing this is likely to
+#      require a cache of scores indexed by some distillation of the state.
 sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
     # low score is better
     my @best-score = ( Inf, Inf, Inf );
@@ -733,6 +746,8 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
             $grid.plot( mark => %mark-by-heading{ $grid.get-heading }, |$annotation, :$user-data );
 
             $grid.de-encroach;
+
+            # check for redundant state here
 
             say "after $seq:";
             say $grid.render-to-multiline-string;
