@@ -94,18 +94,26 @@ class Tangle is export {
     # returns nothing
     submethod build-from-dowker( Dowker:D :$dowker, --> Nil ) {
         my @expanded-pairs = ( 1, 3 ... ∞ ) Z $dowker.numbers;
-        self.build-strand( length => 2 * @expanded-pairs );
+
+        # allocate one extra segment which we'll set as the preferred first segment since all of
+        # the other segments will change as they get crossed.
+        # in this case the extra segment is the first segment.
+        self.build-strand( length => 2 * @expanded-pairs + 1 );
 
         my @segments = self.getOrderedList;
 
+        self.preferred-first = @segments[0];
+
         for @expanded-pairs -> $dowker-pair {
             if $dowker-pair[1] < 0 {
-                self.cross( over => @segments[ $dowker-pair[1].abs - 1 ], under => @segments[ $dowker-pair[0] - 1 ] );
+                self.cross( over => @segments[ $dowker-pair[1].abs ], under => @segments[ $dowker-pair[0] ] );
             }
             else {
-                self.cross( over => @segments[ $dowker-pair[0] - 1 ], under => @segments[ $dowker-pair[1] - 1 ] );
+                self.cross( over => @segments[ $dowker-pair[0] ], under => @segments[ $dowker-pair[1] ] );
             }
         }
+
+        self.preferred-first = @segments[0];
     }
 
     multi submethod BUILD( Dowker:D :$dowker ) {
@@ -117,9 +125,14 @@ class Tangle is export {
     }
 
     multi submethod BUILD( :@tok-pairs ) {
-        self.build-strand( length => 2 * @tok-pairs );
+        # allocate one extra segment which we'll set as the preferred first segment since all of
+        # the other segments will change as they get crossed.
+        # in this case the extra segment is the last segment.
+        self.build-strand( length => 2 * @tok-pairs + 1 );
 
         my @segments = self.getOrderedList;
+
+        self.preferred-first = @segments[ *-1 ];
 
         for @tok-pairs -> @tok-pair {
             self.cross( over => @segments[ @tok-pair[1] ], under => @segments[ @tok-pair[0] ] );
@@ -277,6 +290,8 @@ class Tangle is export {
 
         $!segments{ $over } = False;
         $!segments{ $under } = False;
+
+        return $over, $under;
     }
 
     # Each tangle can be represented by an N-digit number in base
