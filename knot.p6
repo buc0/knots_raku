@@ -6,6 +6,8 @@ use PlottingGrid::Malleable;
 use Knot::Dowker;
 use Knot::Tangle;
 
+CONTROL { when CX::Warn { note $_; exit 1 } }
+
 =begin comment
 potentially useful line drawing characters:
     ─ u+2500
@@ -288,6 +290,9 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
 
     my $scratch-grid = $grid.clone;
 
+    say "start here";
+    say $scratch-grid.render-to-multiline-string;
+
     $scratch-grid.advance();
 
     @trail.push( { taken => pd-ahead, pd-left => pathing-blocked, pd-ahead => pathing-taken, pd-right => pathing-blocked } );
@@ -403,6 +408,7 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
 
                 while @trail.elems > $back-to {
                     $scratch-grid.plot( mark => 'a', user-data => { trail => pathing-abandoned } );
+                    say $scratch-grid.render-to-multiline-string;
 
                     # back out of the location without leaving any (further) marks
                     @trail.pop;
@@ -642,7 +648,9 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
         } );
     }
 
+    my $iterations = 0;
     while @grid-stack.elems {
+        $iterations++;
         say "top of loop";
         say "grid stack has " ~ @grid-stack.elems ~ " elements";
         my $grid-state = @grid-stack.pop;
@@ -805,6 +813,11 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
         }
     }
 
+    say "iterations: $iterations";
+
+    for @best-grids -> $grid {
+        say $grid.render-to-multiline-string;
+    }
     return @best-grids;
 
     ### END ###
