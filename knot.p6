@@ -614,6 +614,8 @@ sub grid-compare( $a, $b ) {
     return ( $a[0] <=> $b[0] || $a[1] <=> $b[1] || $a[2] <=> $b[2] );
 }
 
+my $plot-debug = False;
+
 # TODO
 #   Adjust locations of grid dumps to better line up with the needs of comparisons of
 #   different algorithmic optimizations.
@@ -696,8 +698,12 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
     my $iterations = 0;
     while @grid-stack.elems {
         $iterations++;
-        say "top of loop";
-        say "grid stack has " ~ @grid-stack.elems ~ " elements";
+
+        if $plot-debug {
+            say "top of loop";
+            say "grid stack has " ~ @grid-stack.elems ~ " elements";
+        }
+
         my $grid-state = @grid-stack.pop;
         my $grid = $grid-state<grid>;
 
@@ -706,7 +712,10 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
 
         if grid-compare( @grid-score, @best-score ) == More {
             # there's no point in pursuing this state further
-            say "aborting this state, too large 1";
+            if $plot-debug {
+                say "aborting this state, too large 1";
+            }
+
             next;
         }
 
@@ -721,8 +730,11 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
             my $target-segment = $grid-state<seeking-target>;
             my $crossing = $target-segment.crossing;
 
-            say "$target-segment";
-            say $seq;
+            if $plot-debug {
+                say "$target-segment";
+                say $seq;
+            }
+
             my ( $found-path, $trail-grid ) = do-seek( :$seeking-pattern, :$target-segment, :$seq, grid => $grid.clone );
 
             if $found-path.DEFINITE {
@@ -746,8 +758,10 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                 $trail-grid.simplify;
                 $trail-grid.de-encroach;
 
-                say "after $seq:";
-                say $trail-grid.render-to-multiline-string;
+                if $plot-debug {
+                    say "after $seq:";
+                    say $trail-grid.render-to-multiline-string;
+                }
 
                 $grid = $trail-grid;
             }
@@ -806,8 +820,10 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
 
             # check for redundant state here
 
-            say "after $seq:";
-            say $grid.render-to-multiline-string;
+            if $plot-debug {
+                say "after $seq:";
+                say $grid.render-to-multiline-string;
+            }
         }
 
         # check to see if this state is already worse than the known best
@@ -816,7 +832,10 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
 
         if $grid-score == More {
             # there's no point in pursuing this state further
-            say "aborting this state, too large 2";
+            if $plot-debug {
+                say "aborting this state, too large 2";
+            }
+
             next;
         }
 
@@ -846,7 +865,10 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
         }
         else {
             if $grid-score == Less {
-                say "setting new best";
+                if $plot-debug {
+                    say "setting new best";
+                }
+
                 @best-score = @grid-score;
                 @best-grids = ( $grid );
 
@@ -856,7 +878,10 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                 }
             }
             elsif $grid-score == Same {
-                say "adding new best";
+                if $plot-debug {
+                    say "adding new best";
+                }
+
                 @best-grids.push( $grid );
             }
         }
