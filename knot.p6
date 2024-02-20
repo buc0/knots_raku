@@ -283,15 +283,22 @@ my %turnChart = (
         ph-pos-y => pd-back,
     },
 );
+
+my $do-seek-debug = False;
+
 sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, Grid:D :$grid! ) {
-    say "seeking $seeking-pattern";
+    if $do-seek-debug {
+        say "seeking $seeking-pattern";
+    }
 
     my @trail;
 
     my $scratch-grid = $grid.clone;
 
-    say "start here";
-    say $scratch-grid.render-to-multiline-string;
+    if $do-seek-debug {
+        say "start here";
+        say $scratch-grid.render-to-multiline-string;
+    }
 
     $scratch-grid.advance();
 
@@ -302,22 +309,26 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
     SEEKING: while @trail {
         my $here = @trail[ *-1 ];
 
-        say "trail has " ~ @trail.elems ~ " steps";
+        if $do-seek-debug {
+            say "trail has " ~ @trail.elems ~ " steps";
 
-        say "scratch;";
-        say $scratch-grid.render-to-multiline-string;
+            say "scratch;";
+            say $scratch-grid.render-to-multiline-string;
 
-        # backed-out pathing attempts may have rendered some things blocked, so even if we've been
-        # here before we still need to look around
+            # backed-out pathing attempts may have rendered some things blocked, so even if we've been
+            # here before we still need to look around
 
-        say "at: " ~ $scratch-grid.get-head-location;
-        say "heading: " ~ $scratch-grid.get-heading;
+            say "at: " ~ $scratch-grid.get-head-location;
+            say "heading: " ~ $scratch-grid.get-heading;
+        }
 
         my %vistas;
 
         # taken will exist if we've backtracked to here, in which case we don't need to look around again
         if $here<taken>:!exists {
-            say "we haven't been here before (at least not officially)";
+            if $do-seek-debug {
+                say "we haven't been here before (at least not officially)";
+            }
 
             # we've never officially been here before
             for ( pd-right, pd-ahead, pd-left ) -> $look-direction {
@@ -337,7 +348,10 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
                         }
                         elsif $vista<distance> == 1 {
                             my $looking-at-side = %turnChart{ $looking-absolute }<pd-back>;
-                            say "looking relative $look-direction, looking absolute $looking-absolute at the $looking-at-side face";
+
+                            if $do-seek-debug {
+                                say "looking relative $look-direction, looking absolute $looking-absolute at the $looking-at-side face";
+                            }
 
                             if $user-data{ $looking-at-side }:exists {
                                 if $user-data{ $looking-at-side } === $target-segment {
@@ -347,43 +361,69 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
                                     last SEEKING;
                                 }
                                 else {
-                                    say "looking at $looking-at-side and seeing $user-data{ $looking-at-side }, looking for $target-segment";
+                                    if $do-seek-debug {
+                                        say "looking at $looking-at-side and seeing $user-data{ $looking-at-side }, looking for $target-segment";
+                                    }
+
                                     my %c;
                                     for ph-pos-x, ph-pos-y, ph-neg-x, ph-neg-y -> $h {
                                         %c{ $h } = $user-data{ $h } // '';
                                     }
-                                    say "+x %c{ ph-pos-x }, +y %c{ ph-pos-y }, -x %c{ ph-neg-x }, -y %c{ ph-neg-y }";
-                                    say "blocked 5";
+
+                                    if $do-seek-debug {
+                                        say "+x %c{ ph-pos-x }, +y %c{ ph-pos-y }, -x %c{ ph-neg-x }, -y %c{ ph-neg-y }";
+                                        say "blocked 5";
+                                    }
+
                                     $here{ $look-direction } = pathing-blocked;
                                 }
                             }
                             else {
-                                say "looking at $looking-at-side and seeing nothing, looking for $target-segment";
+                                if $do-seek-debug {
+                                    say "looking at $looking-at-side and seeing nothing, looking for $target-segment";
+                                }
+
                                 my %c;
                                 for ph-pos-x, ph-pos-y, ph-neg-x, ph-neg-y -> $h {
                                     %c{ $h } = $user-data{ $h } // '';
                                 }
-                                say "+x %c{ ph-pos-x }, +y %c{ ph-pos-y }, -x %c{ ph-neg-x }, -y %c{ ph-neg-y }";
-                                say "blocked 2";
+
+                                if $do-seek-debug {
+                                    say "+x %c{ ph-pos-x }, +y %c{ ph-pos-y }, -x %c{ ph-neg-x }, -y %c{ ph-neg-y }";
+                                    say "blocked 2";
+                                }
+
                                 $here{ $look-direction } = pathing-blocked;
                             }
                         }
                         else {
-                            say "saw something at distance " ~ $vista<distance>;
+                            if $do-seek-debug {
+                                say "saw something at distance " ~ $vista<distance>;
+                            }
+
                             $here{ $look-direction } = pathing-open;
                         }
                     }
                     elsif $vista<line> and $vista<distance> == 1 {
-                        say "blocked 3";
+                        if $do-seek-debug {
+                            say "blocked 3";
+                        }
+
                         $here{ $look-direction } = pathing-blocked;
                     }
                     else {
-                        say $look-direction ~ " assumed open";
+                        if $do-seek-debug {
+                            say $look-direction ~ " assumed open";
+                        }
+
                         $here{ $look-direction } = pathing-open;
                     }
                 }
                 else {
-                    say $look-direction ~ " nothing at all, open";
+                    if $do-seek-debug {
+                        say $look-direction ~ " nothing at all, open";
+                    }
+
                     fail;
                     $here{ $look-direction } = pathing-open;
                 }
@@ -395,7 +435,10 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
         # look at the options in order based on our seeking pattern
         PREFERENCE: for |%preferences-by-seeking-pattern{ $seeking-pattern } -> $direction {
             if $here{ $direction } == pathing-open {
-                say "choosing $direction";
+                if $do-seek-debug {
+                    say "choosing $direction";
+                }
+
                 $chosen-direction = $direction;
                 last PREFERENCE;
             }
@@ -408,13 +451,19 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
 
                 while @trail.elems > $back-to {
                     $scratch-grid.plot( mark => 'a', user-data => { trail => pathing-abandoned } );
-                    say $scratch-grid.render-to-multiline-string;
+
+                    if $do-seek-debug {
+                        say $scratch-grid.render-to-multiline-string;
+                    }
 
                     # back out of the location without leaving any (further) marks
                     @trail.pop;
 
                     if !@trail {
-                        say "can't get there from here";
+                        if $do-seek-debug {
+                            say "can't get there from here";
+                        }
+
                         return;
                     }
 
@@ -454,10 +503,12 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
                 # or the trail will seek forever.
                 @trail[ *-1 ]{ pd-ahead } = pathing-blocked;
 
-                say "scratch after backout";
-                say $scratch-grid.render-to-multiline-string;
-                say $scratch-grid.get-head-location;
-                say $scratch-grid.get-heading;
+                if $do-seek-debug {
+                    say "scratch after backout";
+                    say $scratch-grid.render-to-multiline-string;
+                    say $scratch-grid.get-head-location;
+                    say $scratch-grid.get-heading;
+                }
 
                 $here{ $direction } = pathing-abandoned;
 
@@ -465,7 +516,9 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
                 redo SEEKING;
             }
             else {
-                say "would like to go $direction but is $here{ $direction }"
+                if $do-seek-debug {
+                    say "would like to go $direction but is $here{ $direction }"
+                }
             }
         }
 
@@ -476,8 +529,10 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
             $scratch-grid.turn( relative => $chosen-direction );
             $scratch-grid.advance();
 
-            say "after advance, scratch:";
-            say $scratch-grid.render-to-multiline-string;
+            if $do-seek-debug {
+                say "after advance, scratch:";
+                say $scratch-grid.render-to-multiline-string;
+            }
 
             @trail.push( Hash.new );
         }
@@ -502,7 +557,10 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
                 }
 
                 # finally, mark this option as blocked
-                say "blocked 4";
+                if $do-seek-debug {
+                    say "blocked 4";
+                }
+
                 $prev{ $prev<taken> } = pathing-blocked;
             }
         }
