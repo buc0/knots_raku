@@ -404,7 +404,7 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
                 my $vista = %vistas{ $direction };
                 my $notes = $vista<found>;
                 my $user-data = $notes<user-data> // {};
-                my $back-to = $user-data<traillen>;
+                my $back-to = $user-data<traillen> // 0;
 
                 while @trail.elems > $back-to {
                     $scratch-grid.plot( mark => 'a', user-data => { trail => pathing-abandoned } );
@@ -413,8 +413,11 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
                     # back out of the location without leaving any (further) marks
                     @trail.pop;
 
-                    # we can do this without checking the array bounds because we're in this block
-                    # on account of there being prior trail segments
+                    if !@trail {
+                        say "can't get there from here";
+                        return;
+                    }
+
                     my $prev = @trail[ *-1 ];
 
                     # first, backtrack to the previous location
@@ -687,13 +690,13 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                     my $discovered-type;
 
                     if $target-segment.position == over {
-                        $discovered-type = %crossing-type-by-headings{ $grid.get-heading }{ $new-crossing-types{ $crossing } };
+                        $discovered-type = %crossing-type-by-headings{ $trail-grid.get-heading }{ $new-crossing-types{ $crossing } };
                     }
                     else {
-                        $discovered-type = %crossing-type-by-headings{ $new-crossing-types{ $crossing } }{ $grid.get-heading };
+                        $discovered-type = %crossing-type-by-headings{ $new-crossing-types{ $crossing } }{ $trail-grid.get-heading };
                     }
 
-                    $new-crossing-types{ $crossing } = $discovered-type;
+                    $crossing.type = $discovered-type;
                 }
 
                 # simplify before de-encroach tends to improve performance by making
@@ -705,6 +708,10 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                 say $trail-grid.render-to-multiline-string;
 
                 $grid = $trail-grid;
+            }
+            else {
+                # no path exists, so this state is a bust
+                next;
             }
         }
 
@@ -910,13 +917,13 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                             my $discovered-type;
 
                             if $cur-segment.position == over {
-                                $discovered-type = %crossing-type-by-headings{ $grid.get-heading }{ $state<new-crossing-types>{ $crossing } };
+                                $discovered-type = %crossing-type-by-headings{ $trail-grid.get-heading }{ $state<new-crossing-types>{ $crossing } };
                             }
                             else {
-                                $discovered-type = %crossing-type-by-headings{ $state<new-crossing-types>{ $crossing } }{ $grid.get-heading };
+                                $discovered-type = %crossing-type-by-headings{ $state<new-crossing-types>{ $crossing } }{ $trail-grid.get-heading };
                             }
 
-                            %new-crossing-types{ $crossing } = $discovered-type;
+                            $crossing.type = $discovered-type;
                         }
 
                         # TODO
