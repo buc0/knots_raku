@@ -217,6 +217,8 @@ class Grid is export {
     # the x,y of this point should never match the x,y of a point in %!points
     has Point $!head-point;
 
+    has Str $.title is rw;
+
     # new object from scratch
     submethod BUILD() {
         $!head-x = 0;
@@ -719,6 +721,7 @@ class Grid is export {
         Bool:D :$with-head-location is copy = True,
         Bool:D :$with-frame is copy = True,
         Bool:D :$with-frame-marks is copy = True,
+        Bool:D :$with-title is copy = True,
         --> List
     ) {
         my $max-annotation-width = 0;
@@ -756,6 +759,10 @@ class Grid is export {
         }
 
         my @rendered-rows;
+
+        if $with-title and $.title.DEFINITE {
+            @rendered-rows.unshift( $.title );
+        }
 
         if $with-head-location {
             @rendered-rows.unshift( "head = " ~ $!head-x ~ "," ~ $!head-y ~ " - heading " ~ $!heading );
@@ -993,6 +1000,7 @@ class Grid is export {
         Bool:D :$with-head-location is copy = True,
         Bool:D :$with-frame is copy = True,
         Bool:D :$with-frame-marks is copy = True,
+        Bool:D :$with-title is copy = True,
         --> Str
     ) {
         return self.render-to-strings( :$with-annotations, :$with-head-location, :$with-frame, :$with-frame-marks ).join("\n") ~ "\n";
