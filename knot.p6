@@ -581,13 +581,14 @@ sub do-seek( SeekingPattern:D :$seeking-pattern, :$target-segment, Int:D :$seq, 
         $trail-grid.advance;
     }
 
-    my $annotation = %annotation-location-by-position{ $target-segment.position } => $seq ~ %arrow-by-heading{ $trail-grid.get-heading };
+    my $arrow-head = %arrow-by-heading{ $trail-grid.get-heading };
+    my $annotation = %annotation-location-by-position{ $target-segment.position } => $seq ~ $arrow-head;
     $trail-grid.plot( |$annotation );
 
     # render trail as a string
     my $found-path = @turn-by-turn.join( "," );
 
-    return( $found-path, $trail-grid );
+    return( $found-path, $trail-grid, $arrow-head );
 }
 
 # lower score is better
@@ -654,7 +655,8 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
 
         my %new-crossing-types;
 
-        my $annotation = %annotation-location-by-position{ $first-segment.position } => $seq ~ %arrow-by-heading{ $grid.get-heading };
+        my $crossing-label = $seq ~ %arrow-by-heading{ $grid.get-heading };
+        my $annotation = %annotation-location-by-position{ $first-segment.position } => $crossing-label;
 
         my $crossing = $first-segment.crossing;
         my $crossed = $crossing.segments[ over - $first-segment.position ];
@@ -692,6 +694,7 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
             :$known-segments,
             :%new-crossing-types,
             :$seq,
+            path-str => $crossing-label,
         } );
     }
 
@@ -706,6 +709,7 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
 
         my $grid-state = @grid-stack.pop;
         my $grid = $grid-state<grid>;
+        my $path-str = $grid-state<path-str>;
 
         # check to see if this state is already worse than the known best
         my @grid-score = score-grid( :$grid );
@@ -730,15 +734,18 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
             my $target-segment = $grid-state<seeking-target>;
             my $crossing = $target-segment.crossing;
 
+            $path-str ~= $seeking-pattern;
+
             if $plot-debug {
                 say "$target-segment";
                 say $seq;
             }
 
-            my ( $found-path, $trail-grid ) = do-seek( :$seeking-pattern, :$target-segment, :$seq, grid => $grid.clone );
+            my ( $found-path, $trail-grid, $arrow-head ) = do-seek( :$seeking-pattern, :$target-segment, :$seq, grid => $grid.clone );
 
             if $found-path.DEFINITE {
                 $known-segments{ $target-segment } = True;
+                $path-str ~= $seq ~ $arrow-head;
 
                 if !$crossing.type.DEFINITE {
                     my $discovered-type;
@@ -792,7 +799,9 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
 
             my $heading = $grid.get-heading;
 
-            my $annotation = %annotation-location-by-position{ $cur-segment.position } => $seq ~ %arrow-by-heading{ $heading };
+            my $crossing-label = $seq ~ %arrow-by-heading{ $heading };
+            my $annotation = %annotation-location-by-position{ $cur-segment.position } => $crossing-label;
+            $path-str ~= $crossing-label;
 
             my $user-data = {};
 
@@ -860,10 +869,13 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                     known-segments => $known-segments.clone,
                     new-crossing-types => $new-crossing-types.clone,
                     :$seq,
+                    path-str => $path-str,
                 } );
             }
         }
         else {
+            $grid.title = $path-str;
+
             if $grid-score == Less {
                 if $plot-debug {
                     say "setting new best";
@@ -887,11 +899,13 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
         }
     }
 
-    say "iterations: $iterations";
-
     for @best-grids -> $grid {
         say $grid.render-to-multiline-string;
     }
+
+    say "iterations: $iterations";
+
+    say "best score: " ~ @best-score;
 
     return @best-grids;
 }
