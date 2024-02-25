@@ -616,6 +616,7 @@ sub grid-compare( $a, $b ) {
 }
 
 my $plot-debug = False;
+my $do-optimizations = True;
 
 # TODO
 #   Adjust locations of grid dumps to better line up with the needs of comparisons of
@@ -774,6 +775,19 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
             }
             else {
                 # no path exists, so this state is a bust
+
+                # and our sibling (if any) will be too
+                if $do-optimizations {
+                    if
+                        $grid-state<sibling-data>:exists and
+                        @grid-stack.elems and
+                        @grid-stack[ *-1 ]<sibling-data>:exists and
+                        $grid-state<sibling-data> === @grid-stack[ *-1 ]<sibling-data>
+                    {
+                        @grid-stack.pop;
+                    }
+                }
+
                 next;
             }
         }
@@ -860,6 +874,8 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                 $seq = 1;
             }
 
+            my %sibling-data;
+
             for ( cw, ccw ) -> $seeking-pattern {
                 @grid-stack.push( {
                     grid => $grid.clone,
@@ -868,6 +884,7 @@ sub plot( Tangle:D :$tangle, PlotGoal:D :$goal = plot-find-best ) {
                     segments-left => $segments-left.clone,
                     known-segments => $known-segments.clone,
                     new-crossing-types => $new-crossing-types.clone,
+                    :%sibling-data,
                     :$seq,
                     path-str => $path-str,
                 } );
@@ -988,6 +1005,7 @@ for 1 .. 6 -> $n {
     for @numbers.permutations.grep( { $_[0] != 2 && $_[0] != @twos[ *-1 ] } ) -> @permutation {
         # half of the bit patterns are mere inversions of the
         # other half, so skip half by simply never negating the last element
+        # (note from later - the premise above seems dubious)
         for 0 ..^ @twos[ $n - 1 ] -> $sign-bits {
             for 0 ..^ $n -> $i {
                 @permutation[$i] *= -1 ** ( ( $sign-bits +& @twos[ $i ] ) / @twos[ $i ] );
