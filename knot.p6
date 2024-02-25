@@ -57,7 +57,7 @@ possible styles
       +└╪╫╪┐
       + │└┘│
       + └──┘
-    
+
     transition inline - N|0
        l+rl+rl+rl+rl+
       u
@@ -65,8 +65,8 @@ possible styles
       d │        │
       u │        │
       + │  ┌──┐  │
-      d │  │  │  │  
-      u │ 1│ 5│ 3│  
+      d │  │  │  │
+      u │ 1│ 5│ 3│
       + └──╪──╫──╪──┐
       d   4│ 2│ 6│  │
       u    │  │  │  │
@@ -74,7 +74,7 @@ possible styles
       d    │        │
       u    │        │
       +    └────────┘
-    
+
     transition inline - N|0,→
        ll+rrll+rrll+rrll+rrll+
       u
@@ -82,8 +82,8 @@ possible styles
       d  │              │
       u  │              │
       +  │    ┌────┐    │
-      d  │    │    │    │  
-      u  │  1→│  5↓│  3→│  
+      d  │    │    │    │
+      u  │  1→│  5↓│  3→│
       +  └────╪────╫────╪────┐
       d     4↑│  2→│  6↑│    │
       u       │    │    │    │
@@ -91,7 +91,7 @@ possible styles
       d       │              │
       u       │              │
       +       └──────────────┘
-    
+
     transition inline - N|1
        l+r-l+r-l+r-l+r-l+
       u
@@ -100,9 +100,9 @@ possible styles
       | │           │
       u │           │
       + │   ┌───┐   │
-      d │   │   │   │  
-      | │   │   │   │  
-      u │  1│  5│  3│  
+      d │   │   │   │
+      | │   │   │   │
+      u │  1│  5│  3│
       + └───╪───╫───╪───┐
       d    4│  2│  6│   │
       |     │   │   │   │
@@ -112,7 +112,7 @@ possible styles
       |     │           │
       u     │           │
       +     └───────────┘
-    
+
     transition inline - N|1,→
        ll+rr-ll+rr-ll+rr-ll+rr-ll+
       u
@@ -121,9 +121,9 @@ possible styles
       |  │                 │
       u  │                 │
       +  │     ┌─────┐     │
-      d  │     │     │     │  
-      |  │     │     │     │  
-      u  │   1→│   5↓│   3→│  
+      d  │     │     │     │
+      |  │     │     │     │
+      u  │   1→│   5↓│   3→│
       +  └─────╪─────╫─────╪─────┐
       d      4↑│   2→│   6↑│     │
       |        │     │     │     │
@@ -133,7 +133,7 @@ possible styles
       |        │                 │
       u        │                 │
       +        └─────────────────┘
-    
+
     x
        ┌────┐
        │┌─╖ │
@@ -141,7 +141,7 @@ possible styles
         │└╫┘││
         │ ╙─┘│
         └────┘
-    
+
     y
        ┌────┐
        │┌─╖ │
@@ -150,14 +150,14 @@ possible styles
         │ ║╘╪╕
         │ ╙─┘│
         └────┘
-    
+
     z
        ┌──────┐
        │┌──╖┌┐│
        ╘╪╕┌╫┘╘╪╕
         │└┘╙──┘│
         └──────┘
-    
+
 =end comment
 # the purpose of plotting is twofold
 # + one, to have diagrams of my own generation that I can (hopefully)
