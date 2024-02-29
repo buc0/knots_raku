@@ -942,7 +942,8 @@ if True {
     #my $t = Tangle.new( dowker-str => "4 6 8 10 2" );
     #my $t = Tangle.new( dowker-str => "4 6 8 10 12 14 16 18 2" );
     #my $t = Tangle.new( dowker-str => "4 6 10 18 2 8 12 14 16" );
-    plot( tangle => $t );
+    #plot( tangle => $t );
+    say $t.isReal( debug => False );
 }
 
 if False {

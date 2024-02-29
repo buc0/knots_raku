@@ -6,6 +6,10 @@ unit module Knot::Tangle:ver<1>:auth<Brian Conry (brian@theconrys.com)>;
 use Knot::Dowker;
 
 enum CrossingPosition is export <under over>;
+# as a reminder
+# when looking at a crossing from the perspective of being between the "in" portion
+# of each segment, the crossing is L-plus if the left-to-right segment is in the
+# "over" position and the right-to-left segment is in the "under" position
 enum CrossingType is export ( L-minus => -1, L-plus => 1 );
 
 class Segment {
@@ -69,6 +73,8 @@ class Tangle is export {
     has SetHash $.crossings;
 
     # preferred-first maybe should have a setter method that validates that it is in $!segments
+    # could also mark it so that it can't be excised
+    # may want to add a way to "unmark" a segment so that a former first-segment could be excised
     has Segment $.preferred-first is rw;
 
     # returns nothing
@@ -220,6 +226,430 @@ class Tangle is export {
         else {
             return '-';
         }
+    }
+
+    method isReal( Bool :$debug? --> Bool ) {
+        # This method determines whether or not this tangle is "real",
+        # where I'm defining a "real knot" to be one that could be drawn
+        # on a plane or the surface of a sphere, as opposed to an
+        # "imaginary" knot (to coin a term) that cannot be so drawn
+        # without one or more discontinuities, as if a segment were
+        # taking a short-cut through the inside of the sphere in order
+        # to get to the other side of some segment without crossing it.
+        #
+        # The method functions by constructing the spaces bounded by the
+        # segments of the tangle incrementally.
+        #
+        # if the orientations of the crossings isn't specified then during
+        # the process crossing segments will be assigned placeholders
+        # "a" and "b" until an in/out direction is chosen.
+        #
+        # in a tangle where the crossing directions are not specified it
+        # may be that some combinations will be real while others are not.
+        # therefore the algorithm will have to be able to backtrack and
+        # try other combinations until it finds one that works.
+        #
+        # This method is easiest to visualize if you think of the tangle
+        # as being a set of connected crossing hallways (over/under doesn't
+        # matter) rather than as a strand. This algorithm names each wall
+        # according to the corners of the intersections that it forms
+        # (or that form it, depending on your perspective).
+        #
+        # notation example, showing crossings
+        #   1 over X followed by 2 under Y
+        #
+        #              │    │                   │    │
+        #              │    │                   │    │
+        #     1i|Xa    │    │    Xa|1o-2i|Ya    │    │     Ya|2o
+        #              │    │                   │    │
+        #              │ Xa │                   │ Ya │
+        #              │    │                   │    │
+        #   ───────────┘    └───────────────────┘    └──────────────
+        # →         ii        1o             2i        2o          →
+        #   ───────────┐    ┌───────────────────┐    ┌──────────────
+        #              │    │                   │    │
+        #              │ Xb │                   │ Yb │
+        #              │    │                   │    │
+        #     Xb|1i    │    │    Yb|2i-1o|Xb    │    │     2o|Yb
+        #              │    │                   │    │
+        #              │    │                   │    │
+        #
+        #  "i" is short for "in"
+        #  "o" is short for "out"
+        #  "a" is a placeholder for either in or out
+        #  "b" is the plaecholder for the opposite for a given crossing-segment
+        #  "corners" are named for the paths that they border,
+        #    in counter-clockwise order respective to the intersection.
+        #  "walls" are named by their corners, in counter-clockwise order
+        #    respective to the interior of the wall.
+        #
+        # Another important concept for understanding this is that incomplete
+        # walls (walls that haven't yet been proven to be complete), may be
+        # known to be separated from each other.
+        #
+        # For instance, suppose you start at one intersection and walk down
+        # the hallway and pass through two more intersections, so you've passed
+        # two openings on the left and two corresponding openings on the right,
+        # and then the hallway loops around to the left and you return to your
+        # starting interesection. Because you've gone all the way around them
+        # you know that the two openings that were on your left cannot connect
+        # directly to any other openings you know about, and you may also be
+        # pretty sure that they connect to each other, though this hasn't been
+        # proven yet. These two openings are bounded by walls that you don't
+        # know the full names of (at least not officially), but that you know
+        # can't be simply grouped in with any other walls.
+        #
+        # One way of picturing this would be if you were looking down on this
+        # set of crossing hallways from above, but it's completely dark so
+        # you can't see anything. Someone is walking down the hallways and
+        # lighting lamps as they go. When they start they are one spot of
+        # light in the middle of a large connected darkness and every opening
+        # that they pass leads off into this same connected darkness. As they
+        # loop back to come at crossings along the other path they will be
+        # creating loops of lit hallways that will split the one dark unknown
+        # into smaller dark unknowns. The algorithm will keep trakc of these
+        # splits because that's how it determines whether or not the tangle
+        # is "real" - if all of the walls can be named fully (and the
+        # hallways fully lit) then it's "real", but if at some point the
+        # path heads into one of the darknesses and the exit corridor is
+        # on a different dark blob then that combination doesn't work.
+        #
+        # The imagry falls apart at this point because if the direction of
+        # crossings isn't specified up-front then it may be possible to
+        # connect to either the "a" or "b" side of a crossing, and sometimes
+        # a full solution can be found for only one of those choices, so the
+        # algorithm has to keep track of each of those decision points and
+        # be able to revisit them if it can't find a path with the current
+        # set of decisions. A tangle is "imaginary" only if there doesn't
+        # exist any combination of decisions that can be solved.
+
+        # assign each crossing segment a number from 1 to N
+        # using 'not-a-crossing' as a spacer to take the 0 index.
+        my @crossing-segments = self.getOrderedList().grep( { $_ ~~ CrossedSegment } );
+        @crossing-segments.unshift( 'not-a-crossing' );
+        my %number-lookup = @crossing-segments.antipairs;
+        %number-lookup{ 'not-a-crossing' }:delete;
+        @crossing-segments.shift;
+
+        # initialize the stack of decision states
+        my @states = (
+            {
+                grouped-incomplete-spaces => [],
+                active-group => Nil,
+                complete-spaces => [],
+                segments-left => [ |@crossing-segments ],
+                seen-segments => {},
+            },
+        );
+
+        # scratch variables
+        # note that the "cw" and "ccw" are relative to the crossing, starting at the "in" of the current segment
+        my $other-number;
+        my $other-cw-label;
+        my $other-ccw-label;
+
+        # finish initializing the starting decision state with the
+        # information from the first crossing
+        #   (1o|Xb) (Xb|1i) (1i|Xa) (Xa|1o)
+        # set the one group to the active group
+        my $first-segment = @states[0]<segments-left>.shift;
+
+        $other-number = %number-lookup{ $first-segment.crossing.segments[ over - $first-segment.position ] };
+
+        if $first-segment.crossing.type.DEFINITE {
+            if
+                (
+                    $first-segment.crossing.type == L-minus and
+                    $first-segment.position == under
+                ) or
+                (
+                    $first-segment.crossing.type == L-plus and
+                    $first-segment.position == over
+                )
+            {
+                $other-cw-label = 'o';
+                $other-ccw-label = 'i';
+            }
+            else {
+                $other-cw-label = 'i';
+                $other-ccw-label = 'o';
+            }
+        }
+        else {
+            $other-cw-label = 'a';
+            $other-ccw-label = 'b';
+        }
+
+        my @initial-space = ( "1o|$other-number$other-ccw-label", "$other-number$other-ccw-label|1i", "1i|$other-number$other-cw-label", "$other-number$other-cw-label|1o" );
+        @states[0]<grouped-incomplete-spaces>.push( @initial-space );
+        @states[0]<active-group> = @initial-space;
+        @states[0]<seen-segments>{ 1 } = True;
+        @states[0]<seen-segments>{ $other-number } = True;
+
+        while @states.elems {
+            my %state = @states.pop;
+
+            my $next-segment = %state<segments-left>.shift;
+            my $next-number = %number-lookup{ $next-segment };
+
+            if $debug {
+                say '(';
+                dd(
+                  grouped-spaces => %state<grouped-incomplete-spaces>,
+                  active-group => %state<active-group>,
+                  complete-groups => %state<complete-spaces>,
+                  seen => %state<seen-segments>,
+                  :$next-number,
+                );
+                say ')';
+            }
+
+            while not %state<seen-segments>{ $next-number }:exists {
+                $other-number = %number-lookup{ $next-segment.crossing.segments[ over - $next-segment.position ] };
+
+                if $next-segment.crossing.type.DEFINITE {
+                    if
+                      (
+                          $next-segment.crossing.type == L-minus and
+                          $next-segment.position == under
+                      ) or
+                      (
+                          $next-segment.crossing.type == L-plus and
+                          $next-segment.position == over
+                      )
+                    {
+                        $other-cw-label = 'o';
+                        $other-ccw-label = 'i';
+                    }
+                    else {
+                        $other-cw-label = 'i';
+                        $other-ccw-label = 'o';
+                    }
+                }
+                else {
+                    $other-cw-label = 'a';
+                    $other-ccw-label = 'b';
+                }
+
+                %state<active-group>[0] = "$other-number$other-ccw-label|{$next-number}i-" ~ %state<active-group>[0];
+                %state<active-group>.unshift( "{$next-number}o|$other-number$other-ccw-label" );
+                %state<active-group>[ *-1 ] ~= "-{$next-number}i|$other-number$other-cw-label";
+                %state<active-group>.push( "$other-number$other-cw-label|{$next-number}o" );
+
+                %state<seen-segments>{ $next-number } = True;
+                %state<seen-segments>{ $other-number } = True;
+
+                $next-segment = %state<segments-left>.shift;
+                $next-number = %number-lookup{ $next-segment };
+
+                if $debug {
+                    say '(';
+                    dd(
+                      grouped-spaces => %state<grouped-incomplete-spaces>,
+                      active-group => %state<active-group>,
+                      complete-groups => %state<complete-spaces>,
+                      seen => %state<seen-segments>,
+                      :$next-number,
+                    );
+                    say ')';
+                }
+            }
+
+            # look for "i", "a", and "b" in the active group
+            my @options-for-in = %state<active-group>.grep( { / ^ $next-number <[abi]> / } );
+
+            if $debug {
+                dd :@options-for-in;
+            }
+
+            if @options-for-in.elems == 2 {
+                # this can only happen if we find both "a" and "b"
+                # we'll create a copy of the current state that makes the opposite choice
+
+                # clone is shallow
+                my %other-state = %state.clone;
+                %other-state<grouped-incomplete-spaces> = [ %state<grouped-incomplete-spaces>.map( { $_.clone } ) ];
+                %other-state<active-group> = %other-state<grouped-incomplete-spaces>.grep( { $_.grep( { / ^ $next-number a / } ).elems } )[0];
+                for %other-state<active-group>.values {
+                    s/ ( ^ | '|' ) $next-number 'a' /{$0 ~ $next-number ~ 'o'}/;
+                    s/ ( ^ | '|' ) $next-number 'b' /{$0 ~ $next-number ~ 'i'}/;
+                }
+                %other-state<complete-spaces> = %state<complete-spaces>.clone;
+                %other-state<segments-left> = %state<segments-left>.clone;
+                %other-state<seen-segments> = %state<seen-segments>.clone;
+
+                # we'll need to redo this crossing in the copy
+                %other-state<segments-left>.unshift( $next-segment );
+                @states.push( %other-state );
+
+                if $debug {
+                    say '(other';
+                    dd(
+                      grouped-spaces => %other-state<grouped-incomplete-spaces>,
+                      active-group => %other-state<active-group>,
+                      complete-groups => %other-state<complete-spaces>,
+                      seen => %other-state<seen-segments>,
+                      :$next-number,
+                    );
+                    say ')';
+                }
+
+                for %state<active-group>.values {
+                    s/ ( ^ | '|' ) $next-number 'a' /{$0 ~ $next-number ~ 'i'}/;
+                    s/ ( ^ | '|' ) $next-number 'b' /{$0 ~ $next-number ~ 'o'}/;
+                }
+
+                @options-for-in = %state<active-group>.grep( { / ^ $next-number 'i' / } );
+            }
+
+            if $debug {
+                dd :@options-for-in;
+            }
+
+            # if found only "a" or "b"
+            if @options-for-in.elems and @options-for-in[0] ~~ / ^ $next-number (<[ab]>) / {
+                my $in-placeholder = $0;
+                my $out-placeholder = ( $in-placeholder eq 'a' ?? 'b' !! 'a' );
+
+                if $debug {
+                    dd(
+                        :$in-placeholder,
+                        :$out-placeholder,
+                    );
+                }
+
+                # + rename the found one to "i"
+                for %state<active-group>.values {
+                    s/ ( ^ | '|' ) $next-number $in-placeholder /{$0 ~ $next-number ~ 'i'}/;
+                }
+
+                # + search the other incomplete groups and rename the other to "o"
+                for %state<grouped-incomplete-spaces>.grep( { $_.grep( { / ^ $next-number $out-placeholder / } ).elems } )[0].values {
+                    s/ ( ^ | '|' ) $next-number $out-placeholder /{$0 ~ $next-number ~ 'o'}/;
+                }
+
+                @options-for-in = %state<active-group>.grep( { / ^ $next-number 'i' / } );
+
+                if $debug {
+                    say '(';
+                    dd(
+                      grouped-spaces => %state<grouped-incomplete-spaces>,
+                      active-group => %state<active-group>,
+                      complete-groups => %state<complete-spaces>,
+                      seen => %state<seen-segments>,
+                      :$next-number,
+                    );
+                    say ')';
+                }
+            }
+
+            if $debug {
+                dd :@options-for-in;
+            }
+
+            if @options-for-in.elems and @options-for-in[0] ~~ / ^ $next-number i / {
+                if $debug {
+                    say '(';
+                    dd(
+                      grouped-spaces => %state<grouped-incomplete-spaces>,
+                      active-group => %state<active-group>,
+                      complete-groups => %state<complete-spaces>,
+                      seen => %state<seen-segments>,
+                      :$next-number,
+                    );
+                    say ')';
+                }
+
+                # + remove the active group from grouped-incomplete-spaces
+                %state<grouped-incomplete-spaces> = [ %state<grouped-incomplete-spaces>.grep( { not $_ === %state<active-group> } ) ];
+
+                if $debug {
+                    dd(
+                      grouped-spaces => %state<grouped-incomplete-spaces>,
+                    );
+                }
+
+                # + split the active group at the "i" (should be one element ending with "Ni" followed by one starting with "Ni")
+                my $divide-index = %state<active-group>.first( / ^ $next-number 'i' /, :k );
+
+                my @left-items = %state<active-group>[0..^$divide-index];
+                my @right-items = %state<active-group>[$divide-index..*];
+
+                if @left-items.elems == 1 {
+                    #   + if is only one element, push it onto complete-spaces
+                    %state<complete-spaces>.push( @left-items );
+                }
+                else {
+                    #     + join the last elment and first element (in that order) w "-" as the new first element
+                    @left-items.unshift( @left-items.pop ~ '-' ~ @left-items.shift );
+                    #     + add this group to grouped-incomplete-spaces
+                    %state<grouped-incomplete-spaces>.push( @left-items );
+                }
+
+                if @right-items.elems == 1 {
+                    #   + if is only one element, push it onto complete-spaces
+                    %state<complete-spaces>.push( @right-items );
+                }
+                else {
+                    #     + join the last elment and first element (in that order) w "-" as the new first element
+                    @right-items.unshift( @right-items.pop ~ '-' ~ @right-items.shift );
+                    #     + add this group to grouped-incomplete-spaces
+                    %state<grouped-incomplete-spaces>.push( @right-items );
+                }
+
+                if $debug {
+                    say '(';
+                    dd(
+                      grouped-spaces => %state<grouped-incomplete-spaces>,
+                      active-group => %state<active-group>,
+                      complete-groups => %state<complete-spaces>,
+                      seen => %state<seen-segments>,
+                      :$next-number,
+                    );
+                    say ')';
+                }
+
+                # + search grouped-incomplete-spaces for the group with the "o"
+                # + set that group to the active group
+                %state<active-group> = %state<grouped-incomplete-spaces>.grep( { $_.grep( { / ^ $next-number 'o' / } ) } )[0];
+
+                # + rotate the group so that the elemnt starting with "No" is first and the element ending with "No" is last
+                while %state<active-group>[0] !~~ / ^ $next-number 'o' / {
+                    %state<active-group>.push( %state<active-group>.shift );
+                }
+            }
+            else {
+                # else { this state is a bust; discard it }
+                next;
+            }
+
+            if %state<segments-left>.elems {
+                @states.push( %state );
+            }
+            else {
+                if
+                    %state<grouped-incomplete-spaces>.elems == 1 and
+                    %state<active-group>.elems == 2 and
+                    %state<active-group>.grep( { / ^ '1i' / } )
+                {
+                    if $debug {
+                        say '(';
+                        dd(
+                          grouped-spaces => %state<grouped-incomplete-spaces>,
+                          active-group => %state<active-group>,
+                          complete-groups => %state<complete-spaces>,
+                          seen => %state<seen-segments>,
+                          :$next-number,
+                        );
+                        say ')';
+                    }
+
+                    return True;
+                }
+            }
+        }
+
+        return False;
     }
 
     method getOrderedList( Segment :$first? is copy ) {
