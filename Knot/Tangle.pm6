@@ -21,7 +21,7 @@ class PlainSegment is Segment {
     # returns the new Segment
     method split( Bool:D :$after = True, --> Segment ) {
         my $new-half = PlainSegment.new;
-        
+
         if $after {
             $new-half.predecessor = self;
             $new-half.successor = self.successor;
