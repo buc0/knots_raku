@@ -724,20 +724,42 @@ class Tangle is export {
         return $over, $under;
     }
 
-    # Each tangle can be represented by an N-digit number in base
-    # 2N, where N is the number of crossings, where each digit
-    # represents a crossing, in the order visited (most significant
-    # digit first), with a value of the number of other crossings passed
-    # through to get from the first visit of the crossing to the second
-    # visit of the same crossing.  While this number will always be odd
-    # for all real knots and tangles, which would allow using N as the
-    # number base instead of 2N, once imaginary knots and tangles are
-    # allowed the distance may not necessarily be odd, so 2N will be
-    # necessary.
-    # The "canonical" representation of a knot chooses a first
-    # segment to minimize the value of this represtational number.
-    # Where there is a tie, if possible, the first crossing
-    # will be chosen so that it counts from under to over.
+    # With unknown Knots it's tricky to even refer to them in an
+    # unambiguous way that doesn't depend on the current choice
+    # of "first crossing".
+    #
+    # This works around that particular difficulty by coming up
+    # with a way of designating one crossing as "first" in a way
+    # that comes up with the same answer no matter where one
+    # starts. For Knots, like the trefoil, that have N
+    # symmetrical subsets there are N choices that are
+    # completely equivalent and indistinguishable.
+    #
+    # The Knot does need to be directed, though this method does
+    # not preserve or distinguish between the left-handedness or
+    # right-handedness of the total Knot or any independently
+    # orientable subsections of it.
+    #
+    # Each crossing segment (so a Knot with 3 crossings has 6
+    # segments) is assigned a number based on the number of other
+    # crossing segments that are passed through before reaching
+    # the segment that it crosses.
+    #
+    # These numbers will range from 0 to 2(N -1), where N is the
+    # number of crossings. In a "real" knot these numbers will
+    # always be even.
+    #
+    # Next, for each crossing segment construct a number in base
+    # 2(N-1) with 2N digits, where the first (highest-order)
+    # digit is that crossing's number and the remaining digits
+    # are obtained from all of the other segments in the knot in
+    # the order that they would be visited when traversing the
+    # entire Knot in the designated direction.
+    #
+    # Any crossing whose 2N digit number in base 2(N-1) is
+    # lowest is indistinguishable from any other crossing with
+    # the same number and can be considered to be the "first"
+    # crossing.
     method findCanonFirst {
         return unless $!crossings;
 
