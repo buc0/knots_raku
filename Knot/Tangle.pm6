@@ -760,58 +760,78 @@ class Tangle is export {
     # lowest is indistinguishable from any other crossing with
     # the same number and can be considered to be the "first"
     # crossing.
+    #
+    # Fortunately, we don't have to actually calculate these
+    # numbers.
+    # We start with find all of those segments with a distance
+    # equal to the smallest distance overall as the initial
+    # set of candidates.
+    # If at any time through the remaining process we only
+    # have one candidate remaining then we are done.
+    # We then look at the position following each candidate,
+    # find the shortest distance from among those segments,
+    # and filter out any that aren't shortest.
+    # We repeat this process, looking one further away from
+    # each candidate each successive iteration, until we
+    # only have one candidate or until we've looked at the
+    # entire Tangle from the perspective of each candidate.
+    # If we have more than one candidate left that means
+    # there's symmetry in the Tangle and that the remaining
+    # candidates are indistinguishable from each other, so
+    # we just choose one.
     method findCanonFirst {
         return unless $!crossings;
 
-        my $number-base = 2 * $!crossings;
-
         my @segments = self.getOrderedList.grep( { $_ ~~ CrossedSegment } );
+        my $n-segments = @segments.elems;
 
-        my %distances;
+        # since we don't count the two segments involved in the crossing
+        # for determining the distnaces, the sum of the distances will be
+        # two less than the number of segments.
+        my $reciprocal-distance-n = $n-segments - 2;
+
+        my %distances-by-index;
 
         my %seen-crossings;
 
+        # the first time we see a crossing we only have half the information
+        # we need - the index of the first segment.
+        # the second time we see a crossing we can use that stored index
+        # to calculate the distances.
         for 0 ..^ @segments -> $i {
             my $segment = @segments[ $i ];
 
             if %seen-crossings{ $segment.crossing }:exists {
                 my $prev-i = %seen-crossings{ $segment.crossing };
-                %distances{ @segments[ $i ] } = $number-base - $i + $prev-i;
-                %distances{ @segments[ $prev-i ] } = $i - $prev-i;
+                my $prev-i-to-i-delta = $i - $prev-i - 1;
+                my $i-to-prev-i-delta = $reciprocal-distance-n - $prev-i-to-i-delta;
+
+                %distances-by-index{ $i } = $i-to-prev-i-delta;
+                %distances-by-index{ $prev-i } = $prev-i-to-i-delta;
             }
             else {
                 %seen-crossings{ $segment.crossing } = $i;
             }
         }
 
-        #my $best-sum = ∞;
-        my $best-sum = $number-base ** @segments;
-        my $best-first-segment;
+        my $shortest-distance = %distances-by-index.values.min;
 
-        for 1 .. @segments {
-            %seen-crossings = ();
+        my @possible-firsts = %distances-by-index.antipairs.grep( { $_.key == $shortest-distance } ).map( { $_.value } );
 
-            my $sum = 0;
+        # look $offset segments after each candidate and keep
+        # only those that are the shortest at that distance
+        for 0 ^..^ @segments -> $offset {
+            last if @possible-firsts.elems == 1;
 
-            for @segments -> $segment {
-                next if %seen-crossings{ $segment.crossing }:exists;
-
-                $sum *= $number-base;
-                $sum += %distances{ $segment };
-            }
-
-            #say $sum;
-            #say $best-sum;
-            #say $sum <=> $best-sum;
-            if ( $sum < $best-sum ) or ( $sum == $best-sum && $best-first-segment.position == over ) {
-                $best-sum = $sum;
-                $best-first-segment = @segments[0];
-            }
-
-            @segments = @segments.rotate( 1 );
+            my @distance-this-offset-by-index = @possible-firsts.map( { $_ => %distances-by-index{ ($_ + $offset) % $n-segments } } );
+            my $min-this-offset = @distance-this-offset-by-index.map( { $_.value } ).min;
+            @possible-firsts = @distance-this-offset-by-index.grep( { $_.value == $min-this-offset } ).map( { $_.key } );
         }
 
-        return $best-first-segment;
+        # the only way there can be multiple elements in this list is there
+        # is symmetry in the Tangle so that they are all indistinguishable,
+        # which means it doesn't matter which one of them we choose.
+        return @segments[ @possible-firsts[0] ];
     }
 
     method excise-inclusive( Segment:D :$first, Segment:D :$last, :$exclude-marked = True ) {
