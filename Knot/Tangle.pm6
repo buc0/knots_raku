@@ -228,6 +228,28 @@ class Tangle is export {
         }
     }
 
+    # For real tangles it may be worth saving the results of the
+    # analysis used to make this determination, and to tie the
+    # spaces back to segments of the tangles.
+    #
+    # For at least one case, what will be useful will be plain
+    # segments between crossings (the code is supposed to
+    # guarantee that there's always at least one), which would
+    # be equivalent to splitting the notational representation
+    # on '|' and then joining the last and first with '-', i.e.
+    # tracking the sections of wall rather than the corners
+    # that they form (to continue the analogy from below).
+    #
+    # Each of these "plain" segments is bounded by/adjacent to
+    # exactly two walls/spaces. If there are two of these
+    # segments that are bounded by/adjacent to the same two
+    # walls/spaces then that means that this tangle can be
+    # treated like a compound knot, with all of the crossings
+    # between the "plain" segments comprising an isolates
+    # subknot. This is one of the key steps in simplifying
+    # and reducing knots.
+    # Though if one (or both) of the subknots simplifies
+    # down to the unknot then that's not really compound...
     method isReal( Bool :$debug? --> Bool ) {
         # This method determines whether or not this tangle is "real",
         # where I'm defining a "real knot" to be one that could be drawn
