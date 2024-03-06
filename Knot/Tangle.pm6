@@ -991,6 +991,12 @@ class Tangle is export {
 
         my @subknots;
 
+        return $did-reduce;
+
+        ###
+        ### Everything below this point needs to be re-evaluated for utility and correctness
+        ###
+
         REDUCE: for 1 {
             last unless $!crossings;
 
