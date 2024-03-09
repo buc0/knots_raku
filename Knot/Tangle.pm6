@@ -250,6 +250,31 @@ class Tangle is export {
     # and reducing knots.
     # Though if one (or both) of the subknots simplifies
     # down to the unknot then that's not really compound...
+    #
+    # A second case where this information will be useful in
+    # simplifying/reducng a knot is that while building this
+    # data it will be easy to identify and track certain trivial
+    # simplifications.
+    # * A simple twist (Reidmeister Type I) - this creates
+    #   a space that's bounded by only one segment, and is
+    #   the eonly way to create such a space.
+    # * A simple crossover (Reidmeister Type II) - this
+    #   creates a space that's bounded by exactly two
+    #   segments where one segment is the "over" for both
+    #   crossings and the other is the "under" for both
+    #   crossings.
+    #
+    # A third case where this information will be useful is
+    # in planning out the sequence of Reidmeister moves to
+    # accomplish a specific reduction that's been indicated
+    # by another means. This structure will help because it
+    # identifies where one can introduce Reidmeister Type II
+    # moves or perform Reidmeister Type III moves.
+    # A Type II move can be made between any two segments that
+    # border the same space.
+    # A Type III move can be made where there is a space bounded
+    # by three segments, iff one of the segments is either "over"
+    # on both ends or "under" on both ends.
     method isReal( Bool :$debug? --> Bool ) {
         # This method determines whether or not this tangle is "real",
         # where I'm defining a "real knot" to be one that could be drawn
